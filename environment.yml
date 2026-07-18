@@ -1,0 +1,15 @@
+name: gurobi-env
+channels:
+  - gurobi
+  - defaults
+dependencies:
+  - python=3.11
+  - gurobi=13.0
+  - numpy
+  - scipy
+  - pandas
+  - pyarrow
+  - cvxpy
+  - matplotlib
+  - pytest
+  - pip

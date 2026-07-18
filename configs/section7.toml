@@ -1,0 +1,30 @@
+campaign_id = "section7-corrected-v1"
+seed = 20260717
+instances_per_size = 20
+all_sizes = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 15, 20]
+fully_static_sizes = [2, 3, 4, 5, 6, 8, 9, 10, 11]
+adaptivity_sizes = [2, 3, 4, 5, 6, 7, 8, 10, 15, 20]
+customer_distribution = "uniform"
+supplier_distribution = "exponential"
+customer_distribution_parameters = [0.0, 1.0]
+supplier_distribution_parameters = [1.0]
+outside_option = 1.0
+round_digits = 2
+
+[algorithms]
+fully_static_rounding_reps = 50
+one_sided_static_construction_reps = 50
+one_sided_static_evaluation_reps = 50
+one_sided_adaptive_reps_per_side = 50
+experimental_fully_adaptive_reuses_oa = true
+
+[solver]
+time_limit_seconds = 7200.0
+mip_gap = 0.01
+threads = 1
+output = false
+
+[benchmarks]
+max_exact_os_size = 4
+max_opt_oa_size = 7
+max_opt_fa_size = 6
