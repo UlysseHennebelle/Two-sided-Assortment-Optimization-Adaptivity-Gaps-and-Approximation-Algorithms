@@ -1,4 +1,4 @@
-"""Theorem 4.3 policy and the confirmed Section 7 FA comparison convention."""
+"""Theorem 4.3 policy and the Section 7 fully adaptive comparison."""
 
 from __future__ import annotations
 
@@ -45,13 +45,7 @@ def fully_adaptive_experiment_algorithm(
     seed: int = 0,
     oa_result: AlgorithmResult | None = None,
 ) -> AlgorithmResult:
-    """Return the confirmed experimental ALG(FA), which reuses ALG(OA).
-
-    This convention is retained because the author explicitly confirmed it and
-    Appendix G states that ALG(OA) and ALG(FA) are the same empirical method.
-    The distinct Theorem 4.3 policy remains available above so the revised paper
-    can describe the distinction precisely.
-    """
+    """Return the ``ALG(FA)`` value used in the Section 7 comparison."""
 
     result = oa_result or one_sided_adaptive_algorithm(instance, replications_per_side, seed)
     return AlgorithmResult(

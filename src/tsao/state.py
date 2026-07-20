@@ -1,9 +1,5 @@
 """Canonical adaptive state corresponding to Appendix A's backlogs.
 
-The legacy DP mutated a ``BiGraph``, undid transitions, hashed a lossy string,
-and subtracted already realized matches from cached values. This module keeps
-the same state compression explicitly:
-
 - only unprocessed agents and pending choices toward them are retained;
 - completed matches and dead choices are discarded;
 - DP values are future matches, so realized matches never enter the cache key.

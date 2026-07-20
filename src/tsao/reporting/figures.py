@@ -1,4 +1,4 @@
-"""Build Appendix G Figures 3 and 4 from summary/run data."""
+"""Build Figures 3 and 4 from final algorithm values."""
 
 from __future__ import annotations
 

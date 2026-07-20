@@ -1,7 +1,4 @@
-"""Optimized exact dynamic programs for ``OPT(OA)`` and ``OPT(FA)``.
-
-These routines replicate and clarify the important optimizations from legacy
-cell 4:
+"""Exact dynamic programs for ``OPT(OA)`` and ``OPT(FA)``.
 
 * canonical memoization keeps only unprocessed agents and pending choices;
 * already completed matches are rewards on transitions, not part of the key;
@@ -13,8 +10,7 @@ cell 4:
 * all backlog alternatives share continuation increment 1, so they are
   aggregated into one pseudo-option whose weight is their total MNL weight.
 
-This removes explicit powerset enumeration while preserving the mathematics of
-the optimized notebook DP.
+This state representation avoids explicit powerset enumeration.
 """
 
 from __future__ import annotations
@@ -53,7 +49,7 @@ def _terminal_value(instance: MarketInstance, state: AdaptiveState) -> float:
             weight = sum(instance.v[customer, j] for j in state.customer_backlog(customer))
             total += weight / (instance.customer_outside[customer] + weight)
         return float(total)
-    raise ValueError("terminal shortcut requires one exhausted side")
+    raise ValueError("terminal evaluation requires one exhausted side")
 
 
 def _one_sided_customer_value(instance: MarketInstance) -> tuple[float, int, int]:
@@ -100,8 +96,8 @@ def optimize_one_sided_adaptive(instance: MarketInstance) -> DynamicProgramResul
     )
 
 
-def optimize_fully_adaptive(instance: MarketInstance) -> DynamicProgramResult:
-    """Compute Appendix A's Bellman optimum using the MNL state compression."""
+def _optimize_fully_adaptive_state(instance: MarketInstance) -> DynamicProgramResult:
+    """State-object reference implementation of the fully adaptive DP."""
 
     initial = AdaptiveState.initial(instance)
 
@@ -143,3 +139,132 @@ def optimize_fully_adaptive(instance: MarketInstance) -> DynamicProgramResult:
     optimum = value(initial)
     info = value.cache_info()
     return DynamicProgramResult("OPT_FA", float(optimum), int(info.currsize), int(info.hits))
+
+
+def optimize_fully_adaptive(instance: MarketInstance) -> DynamicProgramResult:
+    """Compute Appendix A's Bellman optimum with a packed canonical key.
+
+    A customer digit is zero while that customer is unprocessed, one after an
+    outside/dead choice, and ``2 + j`` while its pending choice targets an
+    unprocessed supplier ``j``.  Supplier digits use the symmetric encoding.
+    The two mixed-radix digit vectors are packed into one Python integer before
+    memoization.  This represents exactly the same canonical states as
+    :class:`AdaptiveState`, but avoids retaining two tuples and a dataclass
+    instance for every cached state.  That memory reduction is material at the
+    Section 7 endpoint: a balanced size-six instance has 19,886,511 noninitial
+    cached states.
+    """
+
+    n, m = instance.num_customers, instance.num_suppliers
+    customer_base = m + 2
+    supplier_base = n + 2
+    customer_places = tuple(customer_base**i for i in range(n))
+    supplier_places = tuple(supplier_base**j for j in range(m))
+    customer_space = customer_base**n
+
+    cache: dict[int, float] = {}
+    cache_hits = 0
+
+    def value(code: int) -> float:
+        nonlocal cache_hits
+        cached = cache.get(code)
+        if cached is not None:
+            cache_hits += 1
+            return cached
+
+        customer_code = code % customer_space
+        supplier_code = code // customer_space
+        customer_digits = tuple(
+            (customer_code // customer_places[i]) % customer_base for i in range(n)
+        )
+        supplier_digits = tuple(
+            (supplier_code // supplier_places[j]) % supplier_base for j in range(m)
+        )
+        customers = tuple(i for i, digit in enumerate(customer_digits) if digit == 0)
+        suppliers = tuple(j for j, digit in enumerate(supplier_digits) if digit == 0)
+
+        if not customers:
+            total = 0.0
+            for supplier in suppliers:
+                pending_digit = supplier + 2
+                weight = sum(
+                    instance.w[supplier, i]
+                    for i, digit in enumerate(customer_digits)
+                    if digit == pending_digit
+                )
+                total += weight / (instance.supplier_outside[supplier] + weight)
+            result = float(total)
+            cache[code] = result
+            return result
+        if not suppliers:
+            total = 0.0
+            for customer in customers:
+                pending_digit = customer + 2
+                weight = sum(
+                    instance.v[customer, j]
+                    for j, digit in enumerate(supplier_digits)
+                    if digit == pending_digit
+                )
+                total += weight / (instance.customer_outside[customer] + weight)
+            result = float(total)
+            cache[code] = result
+            return result
+
+        best = 0.0
+        for customer in customers:
+            pending_digit = customer + 2
+            cleared_supplier_code = supplier_code
+            backlog_weight = 0.0
+            for supplier, digit in enumerate(supplier_digits):
+                if digit == pending_digit:
+                    cleared_supplier_code += (1 - digit) * supplier_places[supplier]
+                    backlog_weight += instance.v[customer, supplier]
+            outside_code = (
+                customer_code
+                + customer_places[customer]
+                + customer_space * cleared_supplier_code
+            )
+            outside_value = value(outside_code)
+            options = [MnlOption(-1, 1.0, backlog_weight)]
+            for supplier in suppliers:
+                choice_code = outside_code + (supplier + 1) * customer_places[customer]
+                continuation = value(choice_code)
+                options.append(
+                    MnlOption(supplier, continuation - outside_value, instance.v[customer, supplier])
+                )
+            assortment = optimize_mnl(options, instance.customer_outside[customer])
+            best = max(best, outside_value + assortment.value)
+
+        for supplier in suppliers:
+            pending_digit = supplier + 2
+            cleared_customer_code = customer_code
+            backlog_weight = 0.0
+            for customer, digit in enumerate(customer_digits):
+                if digit == pending_digit:
+                    cleared_customer_code += (1 - digit) * customer_places[customer]
+                    backlog_weight += instance.w[supplier, customer]
+            outside_code = (
+                cleared_customer_code
+                + customer_space * (supplier_code + supplier_places[supplier])
+            )
+            outside_value = value(outside_code)
+            options = [MnlOption(-1, 1.0, backlog_weight)]
+            for customer in customers:
+                choice_code = (
+                    outside_code
+                    + customer_space * (customer + 1) * supplier_places[supplier]
+                )
+                continuation = value(choice_code)
+                options.append(
+                    MnlOption(customer, continuation - outside_value, instance.w[supplier, customer])
+                )
+            assortment = optimize_mnl(options, instance.supplier_outside[supplier])
+            best = max(best, outside_value + assortment.value)
+        cache[code] = best
+        return best
+
+    optimum = value(0)
+    states = len(cache)
+    hits = cache_hits
+    cache.clear()
+    return DynamicProgramResult("OPT_FA", float(optimum), states, hits)

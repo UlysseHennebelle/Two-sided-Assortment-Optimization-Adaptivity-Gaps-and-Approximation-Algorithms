@@ -2,7 +2,10 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 tmp/
-output/
-data/parquet/**/*.parquet
 *.egg-info/
 .venv/
+
+# Local manuscript references
+7_numerical_experiments.tex
+999_appendix.tex
+paper.pdf

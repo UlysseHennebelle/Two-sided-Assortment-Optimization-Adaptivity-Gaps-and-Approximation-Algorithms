@@ -1,10 +1,10 @@
 """Algorithm 1: Arbitrary Order Greedy from Section 4.1.
 
-For each initiating agent, the continuation revenue of a responding agent is
+For each initiating agent, the marginal revenue of a responding agent is
 the marginal increase in its MNL demand after adding the initiator to its
 backlog. The revenue-ordered MNL oracle then selects the assortment without
-enumerating subsets. This is the core legacy optimization retained by ALG(OS),
-ALG(OA), ALG(FA), and the optimized exact dynamic programs.
+enumerating subsets. The same oracle is used by ALG(OS), ALG(OA), ALG(FA), and
+the exact dynamic programs.
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ import numpy as np
 
 from ..choice import mnl_demand, sample_mnl
 from ..instance import MarketInstance
-from ..oracle import MnlOption, optimize_mnl
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +35,45 @@ def marginal_responding_demand(instance: MarketInstance, supplier: int, customer
     return float(after - before)
 
 
+def revenue_ordered_customer_assortment(
+    instance: MarketInstance,
+    customer: int,
+    backlog_weights: np.ndarray,
+) -> tuple[int, ...]:
+    """Vectorize Algorithm 1's revenues, then apply the exact ordered oracle.
+
+    The generic :func:`optimize_mnl` interface remains useful elsewhere. This
+    array-specialized equivalent avoids allocating and sorting one Python
+    dataclass for every market edge.
+    """
+
+    supplier_outside = instance.supplier_outside
+    after_weights = backlog_weights + instance.w[:, customer]
+    revenues = (
+        after_weights / (supplier_outside + after_weights)
+        - backlog_weights / (supplier_outside + backlog_weights)
+    )
+    customer_weights = instance.v[customer]
+    positive = np.flatnonzero(customer_weights > 0.0)
+    ordered = positive[np.argsort(-revenues[positive], kind="stable")]
+    chosen: list[int] = []
+    numerator = 0.0
+    total_weight = 0.0
+    value = 0.0
+    outside = float(instance.customer_outside[customer])
+    for supplier_index in ordered:
+        supplier = int(supplier_index)
+        revenue = float(revenues[supplier])
+        weight = float(customer_weights[supplier])
+        if revenue + 1e-15 < value:
+            break
+        chosen.append(supplier)
+        numerator += revenue * weight
+        total_weight += weight
+        value = numerator / (outside + total_weight)
+    return tuple(chosen)
+
+
 def arbitrary_order_greedy_customers(
     instance: MarketInstance,
     rng: np.random.Generator,
@@ -51,16 +89,7 @@ def arbitrary_order_greedy_customers(
     assortments: list[tuple[int, ...]] = [()] * instance.num_customers
     choices: list[int | None] = [None] * instance.num_customers
     for customer in order:
-        options = [
-            MnlOption(
-                supplier,
-                marginal_responding_demand(instance, supplier, customer, backlog_weights[supplier]),
-                instance.v[customer, supplier],
-            )
-            for supplier in range(instance.num_suppliers)
-        ]
-        solution = optimize_mnl(options, instance.customer_outside[customer])
-        assortment = tuple(int(supplier) for supplier in solution.item_ids)
+        assortment = revenue_ordered_customer_assortment(instance, customer, backlog_weights)
         choice = sample_mnl(
             assortment,
             [instance.v[customer, supplier] for supplier in assortment],

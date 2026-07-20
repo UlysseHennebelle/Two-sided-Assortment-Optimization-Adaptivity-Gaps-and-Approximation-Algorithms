@@ -1,22 +1,15 @@
-"""Structured generators for Appendix G sensitivity experiments.
+"""Structured instance generators for the Appendix G experiments.
 
-This module follows the confirmed data-generating code rather than the reversed
-distribution sentence in the current PDF:
-
-* customer-side ``v`` prototypes use sparse ``Exp(1)`` draws;
-* supplier-side ``w`` prototypes use sparse ``U[0,1]`` draws;
-* a draw is nonzero with probability ``sqrt(2)/2``;
-* each prototype receives one scale from ``{0.5,1,2}``;
-* agents independently select one of ``q`` prototypes on their side.
-
-Base draws are rounded before the group scale is applied, as in
-``BiGraph.roll_instance_groups``.
+Customer prototypes use sparse exponential draws, supplier prototypes use
+sparse uniform draws, and agents independently select one of ``q`` prototypes
+on their side. Prototype weights are rounded before their group scale is
+applied.
 """
 
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 
 import numpy as np
 
@@ -88,7 +81,7 @@ def generate_appendix_g_instance(
     )
 
 
-def generate_appendix_g_campaign(
+def iter_appendix_g_campaign(
     campaign_id: str,
     sizes: Sequence[int],
     q_values: Sequence[int],
@@ -97,12 +90,11 @@ def generate_appendix_g_campaign(
     group_scales: Sequence[float] = (0.5, 1.0, 2.0),
     nonzero_probability: float = math.sqrt(2.0) / 2.0,
     round_digits: int = 2,
-) -> list[GeneratedInstance]:
-    """Generate a grouped campaign with a configurable sample-count rule."""
+) -> Iterator[GeneratedInstance]:
+    """Yield a grouped campaign in deterministic seed order."""
 
     jobs = [(size, q, replicate) for size in sizes for q in q_values for replicate in range(int(samples_for_q(q)))]
     children = np.random.SeedSequence(seed).spawn(len(jobs))
-    generated: list[GeneratedInstance] = []
     for job, child in zip(jobs, children, strict=True):
         size, q, replicate = job
         child_seed = int(child.generate_state(1, dtype=np.uint64)[0])
@@ -115,21 +107,39 @@ def generate_appendix_g_campaign(
             nonzero_probability,
             round_digits,
         )
-        generated.append(
-            GeneratedInstance(
-                stable_instance_id(campaign_id, replicate, child_seed, instance),
-                campaign_id,
-                "appendix_g",
-                replicate,
-                child_seed,
-                instance,
-                {"size": size, "q": q},
-            )
+        yield GeneratedInstance(
+            stable_instance_id(campaign_id, replicate, child_seed, instance),
+            campaign_id,
+            "appendix_g",
+            replicate,
+            child_seed,
+            instance,
+            {"size": size, "q": q, "master_seed": seed},
+            seed,
         )
-    return generated
 
 
-def outside_option_scenarios(instance: MarketInstance, values: Sequence[float]) -> tuple[MarketInstance, ...]:
-    """Reuse one base matrix pair under several common outside-option values."""
+def generate_appendix_g_campaign(
+    campaign_id: str,
+    sizes: Sequence[int],
+    q_values: Sequence[int],
+    samples_for_q: Callable[[int], int],
+    seed: int,
+    group_scales: Sequence[float] = (0.5, 1.0, 2.0),
+    nonzero_probability: float = math.sqrt(2.0) / 2.0,
+    round_digits: int = 2,
+) -> list[GeneratedInstance]:
+    """Return a materialized grouped campaign for bounded computations."""
 
-    return tuple(instance.with_outside_option(float(value)) for value in values)
+    return list(
+        iter_appendix_g_campaign(
+            campaign_id,
+            sizes,
+            q_values,
+            samples_for_q,
+            seed,
+            group_scales,
+            nonzero_probability,
+            round_digits,
+        )
+    )

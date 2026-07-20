@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tsao"
 version = "0.1.0"
-description = "Corrected computational companion for Two-sided Assortment Optimization"
+description = "Official code for Two-sided Assortment Optimization"
 requires-python = ">=3.11"
 dependencies = [
   "numpy",

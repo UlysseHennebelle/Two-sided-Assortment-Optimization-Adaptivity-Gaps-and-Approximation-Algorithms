@@ -1,8 +1,7 @@
 """Empirical ``ALG(OA)`` based on Algorithm 1 and side comparison.
 
-The legacy experiments run the adaptive greedy algorithm independently from
-both initiating sides and report the larger sample mean. The confirmed protocol
-uses 50 replications per side; tests pass smaller values explicitly.
+The algorithm is evaluated independently from both initiating sides and reports
+the larger sample mean. Section 7 uses 50 replications per side.
 """
 
 from __future__ import annotations

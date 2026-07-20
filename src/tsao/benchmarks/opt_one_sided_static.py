@@ -44,7 +44,60 @@ def value_customer_static_menus(
 
 
 def optimize_customer_one_sided_static(instance: MarketInstance) -> float:
-    """Enumerate all initiating-side menu families; intended for ``n,m <= 3``."""
+    """Enumerate all static menu families using responder-wise expectations.
+
+    For a fixed menu family, initiating choices are independent across agents.
+    Linearity of expectation lets each responder's match probability be
+    evaluated from only the Bernoulli indicators that it was selected. This is
+    exactly equivalent to enumerating every joint initiating-choice outcome,
+    but makes the paper's size-four endpoint practical.
+    """
+
+    n = instance.num_customers
+    m = instance.num_suppliers
+    menu_count = 1 << m
+    menu_masks = np.arange(menu_count, dtype=np.uint64)
+    menu_edges = (
+        (menu_masks[:, None] >> np.arange(m, dtype=np.uint64)[None, :]) & 1
+    ).astype(np.float64)
+    choice_probabilities = np.empty((n, menu_count, m), dtype=np.float64)
+    for customer in range(n):
+        denominators = (
+            instance.customer_outside[customer]
+            + menu_edges @ instance.v[customer]
+        )
+        choice_probabilities[customer] = (
+            menu_edges * instance.v[customer][None, :] / denominators[:, None]
+        )
+
+    menu_families = np.indices((menu_count,) * n, dtype=np.int32).reshape(n, -1).T
+    customer_indices = np.broadcast_to(np.arange(n), menu_families.shape)
+    subset_masks = np.arange(1 << n, dtype=np.uint64)
+    subset_edges = (
+        (subset_masks[:, None] >> np.arange(n, dtype=np.uint64)[None, :]) & 1
+    ).astype(bool)
+    family_values = np.zeros(len(menu_families), dtype=np.float64)
+    for supplier in range(m):
+        probabilities = choice_probabilities[
+            customer_indices,
+            menu_families,
+            supplier,
+        ]
+        backlog_weights = subset_edges @ instance.w[supplier]
+        demands = backlog_weights / (
+            instance.supplier_outside[supplier] + backlog_weights
+        )
+        for selected, demand in zip(subset_edges, demands, strict=True):
+            outcome_probabilities = np.prod(
+                np.where(selected[None, :], probabilities, 1.0 - probabilities),
+                axis=1,
+            )
+            family_values += demand * outcome_probabilities
+    return float(np.max(family_values))
+
+
+def _optimize_customer_one_sided_static_scalar(instance: MarketInstance) -> float:
+    """Scalar joint-outcome enumerator retained as an exact test oracle."""
 
     all_menus = _powerset(tuple(range(instance.num_suppliers)))
     return max(

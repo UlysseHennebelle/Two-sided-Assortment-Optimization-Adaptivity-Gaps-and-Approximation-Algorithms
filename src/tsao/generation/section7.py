@@ -2,7 +2,7 @@
 
 Section 7 uses balanced MNL markets with customer weights sampled uniformly on
 ``[0,1]`` and supplier weights sampled from ``Exp(1)``. Base draws are rounded
-to two decimals, matching the confirmed notebook protocol.
+to two decimal places.
 """
 
 from __future__ import annotations
@@ -25,11 +25,26 @@ class GeneratedInstance:
     generation_seed: int
     instance: MarketInstance
     parameters: Mapping[str, Any]
+    master_seed: int | None = None
 
 
 def stable_instance_id(campaign_id: str, replicate: int, seed: int, instance: MarketInstance) -> str:
     payload = f"{campaign_id}|{replicate}|{seed}|{instance.checksum()}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
+
+
+def section7_generation_seed(master_seed: int, size: int, replicate: int) -> int:
+    """Derive a stable instance seed from its campaign coordinates."""
+
+    if master_seed < 0:
+        raise ValueError("master_seed must be nonnegative")
+    if size <= 0:
+        raise ValueError("size must be positive")
+    if replicate < 0:
+        raise ValueError("replicate must be nonnegative")
+    return int(
+        np.random.SeedSequence([master_seed, size, replicate]).generate_state(1, dtype=np.uint64)[0]
+    )
 
 
 def generate_section7_instance(
@@ -67,13 +82,14 @@ def generate_section7_campaign(
 ) -> list[GeneratedInstance]:
     """Generate the configured balanced Section 7 campaign."""
 
-    children = np.random.SeedSequence(seed).spawn(len(sizes) * instances_per_size)
+    if instances_per_size <= 0:
+        raise ValueError("instances_per_size must be positive")
+    if len(set(sizes)) != len(sizes):
+        raise ValueError("sizes must not contain duplicates")
     generated: list[GeneratedInstance] = []
-    position = 0
     for size in sizes:
         for replicate in range(instances_per_size):
-            child_seed = int(children[position].generate_state(1, dtype=np.uint64)[0])
-            position += 1
+            child_seed = section7_generation_seed(seed, size, replicate)
             instance = generate_section7_instance(size, size, child_seed, round_digits)
             generated.append(
                 GeneratedInstance(
@@ -83,7 +99,8 @@ def generate_section7_campaign(
                     replicate,
                     child_seed,
                     instance,
-                    {"size": size, "round_digits": round_digits},
+                    {"size": size, "round_digits": round_digits, "master_seed": seed},
+                    seed,
                 )
             )
     return generated

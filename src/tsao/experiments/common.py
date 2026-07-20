@@ -1,33 +1,64 @@
-"""Shared run-record construction for all paper experiments."""
+"""Construct final result rows for the paper experiments."""
 
 from __future__ import annotations
 
 import hashlib
-import json
 import time
-from datetime import datetime, timezone
-from typing import Any, Callable
-
-import gurobipy as gp
+from collections.abc import Callable
+from typing import Any
 
 from ..benchmarks.solver import SolverResult
 from ..policy import AlgorithmResult
-from ..storage.schemas import SCHEMA_VERSION
 
 
 def stable_run_id(instance_id: str, scenario_id: str, algorithm: str, seed: int) -> str:
+    """Return the deterministic identifier for one algorithm evaluation."""
+
     payload = f"{instance_id}|{scenario_id}|{algorithm}|{seed}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
 
 
 def timed(call: Callable[[], Any]) -> tuple[Any, float]:
+    """Return a computation result and its elapsed wall-clock time."""
+
     start = time.perf_counter()
     result = call()
     return result, float(time.perf_counter() - start)
 
 
-def _json(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+def _row(
+    campaign_id: str,
+    instance_id: str,
+    scenario_id: str,
+    algorithm: str,
+    status: str,
+    value: float | None,
+    runtime_seconds: float,
+    seed: int,
+    *,
+    incumbent: float | None = None,
+    best_bound: float | None = None,
+    relative_gap: float | None = None,
+    solver: bool = False,
+) -> dict[str, Any]:
+    return {
+        "run_id": stable_run_id(instance_id, scenario_id, algorithm, seed),
+        "campaign_id": campaign_id,
+        "instance_id": instance_id,
+        "scenario_id": scenario_id,
+        "market_size": None,
+        "q": None,
+        "outside_option": None,
+        "algorithm": algorithm,
+        "status": status,
+        "value": value,
+        "incumbent": incumbent,
+        "best_bound": best_bound,
+        "relative_gap": relative_gap,
+        "runtime_seconds": runtime_seconds,
+        "algorithm_seed": None if solver else seed,
+        "solver_seed": seed if solver else None,
+    }
 
 
 def algorithm_record(
@@ -37,31 +68,21 @@ def algorithm_record(
     result: AlgorithmResult,
     runtime_seconds: float,
     seed: int,
-    config_digest: str,
+    config_digest: str | None = None,
 ) -> dict[str, Any]:
-    run_id = stable_run_id(instance_id, scenario_id, result.name, seed)
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "run_id": run_id,
-        "campaign_id": campaign_id,
-        "instance_id": instance_id,
-        "scenario_id": scenario_id,
-        "algorithm": result.name,
-        "initiating_side": result.initiating_side.value if result.initiating_side else None,
-        "status": "completed",
-        "value": result.value,
-        "incumbent": None,
-        "best_bound": None,
-        "relative_gap": None,
-        "runtime_seconds": runtime_seconds,
-        "algorithm_seed": seed,
-        "solver_seed": None,
-        "solver_name": None,
-        "solver_version": None,
-        "config_hash": config_digest,
-        "metadata_json": _json(result.metadata),
-        "created_at_utc": datetime.now(timezone.utc),
-    }
+    """Create a result row for a sampled or deterministic algorithm."""
+
+    del config_digest
+    return _row(
+        campaign_id,
+        instance_id,
+        scenario_id,
+        result.name,
+        "completed",
+        float(result.value),
+        runtime_seconds,
+        seed,
+    )
 
 
 def solver_record(
@@ -70,31 +91,25 @@ def solver_record(
     scenario_id: str,
     result: SolverResult,
     seed: int,
-    config_digest: str,
+    config_digest: str | None = None,
 ) -> dict[str, Any]:
-    run_id = stable_run_id(instance_id, scenario_id, result.name, seed)
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "run_id": run_id,
-        "campaign_id": campaign_id,
-        "instance_id": instance_id,
-        "scenario_id": scenario_id,
-        "algorithm": result.name,
-        "initiating_side": None,
-        "status": result.status,
-        "value": result.incumbent,
-        "incumbent": result.incumbent,
-        "best_bound": result.best_bound,
-        "relative_gap": result.relative_gap,
-        "runtime_seconds": result.runtime_seconds,
-        "algorithm_seed": None,
-        "solver_seed": seed,
-        "solver_name": "gurobi",
-        "solver_version": ".".join(str(item) for item in gp.gurobi.version()),
-        "config_hash": config_digest,
-        "metadata_json": _json(result.metadata),
-        "created_at_utc": datetime.now(timezone.utc),
-    }
+    """Create a result row for an optimization model."""
+
+    del config_digest
+    return _row(
+        campaign_id,
+        instance_id,
+        scenario_id,
+        result.name,
+        result.status,
+        result.incumbent,
+        result.runtime_seconds,
+        seed,
+        incumbent=result.incumbent,
+        best_bound=result.best_bound,
+        relative_gap=result.relative_gap,
+        solver=True,
+    )
 
 
 def simple_value_record(
@@ -104,34 +119,26 @@ def simple_value_record(
     name: str,
     value: float,
     runtime_seconds: float,
-    config_digest: str,
+    config_digest: str | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    result = AlgorithmResult(name=name, value=float(value), metadata=metadata or {})
-    return algorithm_record(campaign_id, instance_id, scenario_id, result, runtime_seconds, 0, config_digest)
+    """Create a result row for a directly computed benchmark value."""
+
+    del config_digest, metadata
+    return _row(
+        campaign_id,
+        instance_id,
+        scenario_id,
+        name,
+        "completed",
+        float(value),
+        runtime_seconds,
+        0,
+    )
 
 
 def replication_records(run_record: dict[str, Any], result: AlgorithmResult) -> list[dict[str, Any]]:
-    """Expand retained stochastic values and their exact child seeds."""
+    """Return no rows because published output stores final values only."""
 
-    seeds = tuple(result.metadata.get("replication_seeds", ()))
-    values = result.replications
-    if not values:
-        return []
-    if seeds and len(seeds) != len(values):
-        raise ValueError(f"Seed/value count mismatch for {result.name}")
-    split = len(values) // 2 if result.name in {"ALG_OS", "ALG_OA", "ALG_FA"} else len(values)
-    records = []
-    for index, value in enumerate(values):
-        side = "customers" if index < split else "suppliers"
-        records.append(
-            {
-                "schema_version": SCHEMA_VERSION,
-                "run_id": run_record["run_id"],
-                "replication": index,
-                "initiating_side": side,
-                "simulation_seed": seeds[index] if seeds else None,
-                "matches": float(value),
-            }
-        )
-    return records
+    del run_record, result
+    return []

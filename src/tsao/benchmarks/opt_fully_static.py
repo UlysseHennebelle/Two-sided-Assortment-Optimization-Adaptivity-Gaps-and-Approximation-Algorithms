@@ -23,9 +23,8 @@ def optimize_fully_static(
 ) -> SolverResult:
     """Solve the continuous bilinear reformulation of Problem (11).
 
-    The legacy function returned only Gurobi's objective bound. The corrected
-    API retains both incumbent and bound so reporting can distinguish a feasible
-    solution from an upper bound when the time or gap limit is reached.
+    The result contains both the incumbent and the best bound, so reporting can
+    distinguish a feasible value from an upper bound at the stopping time.
     """
 
     normalized = instance.normalized_outside()
@@ -58,7 +57,6 @@ def optimize_fully_static(
             "mip_gap_target": mip_gap,
             "time_limit_seconds": time_limit_seconds,
             "solver_seed": solver_seed,
-            "legacy_reported_field": "best_bound",
         },
     )
 

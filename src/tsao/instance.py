@@ -1,9 +1,4 @@
-"""Market instances for the model in Section 2 and its MNL specialization.
-
-The paper uses ``n`` customers and ``m`` suppliers. To avoid the legacy
-notebook's ambiguous ``m``/``n`` convention, code uses the explicit properties
-``num_customers`` and ``num_suppliers``.
-"""
+"""Market instances for the model in Section 2 and its MNL specialization."""
 
 from __future__ import annotations
 
@@ -116,8 +111,7 @@ class MarketInstance:
         """Return an equivalent instance whose outside weights are all one.
 
         Dividing every agent's item weights by that agent's outside weight does
-        not change MNL probabilities. This is the non-mutating equivalent of the
-        legacy outside-option experiment's repeated matrix scaling.
+        not change MNL probabilities.
         """
 
         return MarketInstance(

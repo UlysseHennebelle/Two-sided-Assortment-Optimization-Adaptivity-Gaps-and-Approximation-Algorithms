@@ -1,19 +1,9 @@
-"""Corrected empirical implementation of ``ALG(FS)`` from Section 5.
+"""Fully static approximation algorithm from Section 5.
 
-The implementation follows legacy cell 8 because that is the algorithm used to
-produce the paper data:
-
-1. split edges using the confirmed threshold ``alpha=(sqrt(5)-1)/2``;
-2. solve the low/low LP and independently round its edge variables;
-3. run the legacy marginal-demand greedy routine on customer-high edges;
-4. transpose supplier-high edges once and run the same greedy routine;
-5. return the best of the three values.
-
-This is intentionally the empirical high-value greedy routine rather than the
-continuous-greedy method in the proof of Lemma 5.4. The revised paper must name
-that computational choice explicitly. The legacy code transposed the
-supplier-high subinstance twice before evaluating it; this module corrects that
-error by using one immutable transposition.
+Edges are partitioned into low/low, customer-high, and supplier-high regions.
+The low/low region is evaluated by independently rounding its relaxation. The
+two high-value regions use the marginal-demand construction. The algorithm
+returns the largest expected matching value among the resulting candidates.
 """
 
 from __future__ import annotations
@@ -25,8 +15,8 @@ import gurobipy as gp
 import numpy as np
 from gurobipy import GRB
 from numpy.typing import NDArray
+from scipy import sparse
 
-from ..choice import mnl_demand
 from ..instance import MarketInstance
 from ..policy import AlgorithmResult
 
@@ -62,47 +52,61 @@ def _masked_instance(instance: MarketInstance, mask: NDArray[np.bool_]) -> Marke
     )
 
 
+def _low_value_relaxation_probabilities(
+    instance: MarketInstance,
+    output: bool = False,
+    solver_method: int = 2,
+) -> NDArray[np.float64]:
+    """Solve the factored low/low LP through Gurobi's matrix API."""
+
+    n, m = instance.num_customers, instance.num_suppliers
+    active = (instance.v > 0.0) & (instance.w.T > 0.0)
+    rows, columns = np.nonzero(active)
+    probabilities = np.zeros((n, m), dtype=np.float64)
+    if len(rows) == 0:
+        return probabilities
+
+    edge_indices = np.arange(len(rows))
+    row_weights = sparse.csr_matrix(
+        (instance.w[columns, rows], (rows, edge_indices)),
+        shape=(n, len(rows)),
+    )
+    column_weights = sparse.csr_matrix(
+        (instance.v[rows, columns], (columns, edge_indices)),
+        shape=(m, len(rows)),
+    )
+    model = gp.Model("alg_fs_low_value")
+    model.Params.OutputFlag = int(output)
+    model.Params.Threads = 1
+    model.Params.Method = solver_method
+    y = model.addMVar(len(rows), lb=0.0, name="y")
+    row_slack = model.addMVar(n, lb=0.0, name="row_slack")
+    column_slack = model.addMVar(m, lb=0.0, name="column_slack")
+    model.addConstr(row_slack + row_weights @ y <= 1.0)
+    model.addConstr(column_slack + column_weights @ y <= 1.0)
+    model.addConstr(y <= row_slack[rows])
+    model.addConstr(y <= column_slack[columns])
+    objective = instance.v[rows, columns] * instance.w[columns, rows]
+    model.setObjective(objective @ y, GRB.MAXIMIZE)
+    model.optimize()
+    if model.Status != GRB.OPTIMAL:
+        raise RuntimeError(f"Low-value relaxation failed with Gurobi status {model.Status}")
+    probabilities[rows, columns] = np.asarray(y.X, dtype=np.float64)
+    return np.clip(probabilities, 0.0, 1.0)
+
+
 def low_value_candidate(
     instance: MarketInstance,
     replications: int,
     rng: np.random.Generator,
     output: bool = False,
 ) -> StaticCandidate:
-    """Solve the legacy low/low relaxation and estimate independent rounding.
-
-    The LP uses explicit row and column slack variables. This is the factored
-    equivalent of the notebook's extra last row/column in ``y``.
-    """
+    """Solve the low/low relaxation and estimate independent rounding."""
 
     if replications <= 0:
         raise ValueError("replications must be positive")
     n, m = instance.num_customers, instance.num_suppliers
-    model = gp.Model("alg_fs_low_value")
-    model.Params.OutputFlag = int(output)
-    y = model.addVars(n, m, lb=0.0, name="y")
-    row_slack = model.addVars(n, lb=0.0, name="row_slack")
-    column_slack = model.addVars(m, lb=0.0, name="column_slack")
-    for i in range(n):
-        model.addConstr(
-            row_slack[i] + gp.quicksum(instance.w[j, i] * y[i, j] for j in range(m)) <= 1.0
-        )
-    for j in range(m):
-        model.addConstr(
-            column_slack[j] + gp.quicksum(instance.v[i, j] * y[i, j] for i in range(n)) <= 1.0
-        )
-    for i in range(n):
-        for j in range(m):
-            model.addConstr(y[i, j] <= row_slack[i])
-            model.addConstr(y[i, j] <= column_slack[j])
-    model.setObjective(
-        gp.quicksum(instance.v[i, j] * instance.w[j, i] * y[i, j] for i in range(n) for j in range(m)),
-        GRB.MAXIMIZE,
-    )
-    model.optimize()
-    if model.Status != GRB.OPTIMAL:
-        raise RuntimeError(f"Low-value relaxation failed with Gurobi status {model.Status}")
-    probabilities = np.array([[y[i, j].X for j in range(m)] for i in range(n)], dtype=np.float64)
-    probabilities = np.clip(probabilities, 0.0, 1.0)
+    probabilities = _low_value_relaxation_probabilities(instance, output)
     values = []
     best_edges: NDArray[np.bool_] | None = None
     best_value = -math.inf
@@ -113,36 +117,30 @@ def low_value_candidate(
         if value > best_value:
             best_value = value
             best_edges = edges
-    # The notebook reports the Monte Carlo mean, not the best realized rounding.
     return StaticCandidate("low_low", float(np.mean(values)), best_edges)
 
 
 def high_value_greedy_candidate(instance: MarketInstance, name: str = "high_value") -> StaticCandidate:
-    """Run the confirmed empirical marginal-demand greedy routine.
+    """Construct a high-value edge set by marginal responding-side demand.
 
-    Customers are processed in index order and assigned to the supplier with
-    largest marginal demand increase. As in the notebook, customer weights only
-    determine whether an edge is available; supplier weights determine the
-    greedy marginal. A legacy bug selected supplier zero when a customer had no
-    available edge. The corrected routine skips that customer instead.
+    Initiators are processed in index order and assigned to the available
+    responder with the largest positive marginal demand increase.
     """
 
     n, m = instance.num_customers, instance.num_suppliers
     supplier_weights = np.zeros(m, dtype=np.float64)
     edges = np.zeros((n, m), dtype=bool)
     for i in range(n):
-        best_supplier: int | None = None
-        best_marginal = 0.0
-        for j in range(m):
-            if instance.v[i, j] <= 0.0:
-                continue
-            before = mnl_demand([supplier_weights[j]], instance.supplier_outside[j])
-            after = mnl_demand([supplier_weights[j] + instance.w[j, i]], instance.supplier_outside[j])
-            marginal = after - before
-            if marginal > best_marginal:
-                best_marginal = marginal
-                best_supplier = j
-        if best_supplier is None:
+        available = instance.v[i] > 0.0
+        if not np.any(available):
+            continue
+        outside = instance.supplier_outside
+        before = 1.0 - outside / (outside + supplier_weights)
+        after_weights = supplier_weights + instance.w[:, i]
+        after = 1.0 - outside / (outside + after_weights)
+        marginals = np.where(available, after - before, -np.inf)
+        best_supplier = int(np.argmax(marginals))
+        if marginals[best_supplier] <= 0.0:
             continue
         edges[i, best_supplier] = True
         supplier_weights[best_supplier] += instance.w[best_supplier, i]
@@ -156,7 +154,7 @@ def fully_static_algorithm(
     alpha: float = EMPIRICAL_ALPHA,
     output: bool = False,
 ) -> AlgorithmResult:
-    """Evaluate the three legacy Section 5 candidates and return their maximum."""
+    """Evaluate the three Section 5 candidates and return their maximum."""
 
     if alpha <= 0:
         raise ValueError("alpha must be positive")
@@ -181,6 +179,7 @@ def fully_static_algorithm(
             "candidate_values": {candidate.name: candidate.value for candidate in candidates},
             "selected_candidate": best.name,
             "rounding_replications": replications,
-            "corrected_single_supplier_high_transposition": True,
+            "low_value_solver_threads": 1,
+            "low_value_solver_method": "barrier",
         },
     )

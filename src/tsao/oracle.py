@@ -1,8 +1,7 @@
 """Single-agent MNL assortment oracles used by Algorithms 1 and 2.
 
-The unconstrained oracle retains the notebook's key optimization: sort items by
-continuation revenue and add them while the next revenue is at least the current
-MNL expected value. It therefore avoids enumerating all assortments.
+The unconstrained oracle sorts items by continuation revenue and adds them
+while the next revenue is at least the current MNL expected value.
 """
 
 from __future__ import annotations
