@@ -85,5 +85,4 @@ hashes of the evaluation coordinates. The file contains 21,496 final values:
 1,660 for Section 7, 13,836 for Figure 3, and 6,000 for Figure 4.
 
 `scripts/make_tables.py` derives Tables 1–4 directly from final results.
-`scripts/make_figures.py` derives Figures 3–4 directly from final results. No
-additional numerical datasets are required.
+`scripts/make_figures.py` derives Figures 3–4 directly from final results.

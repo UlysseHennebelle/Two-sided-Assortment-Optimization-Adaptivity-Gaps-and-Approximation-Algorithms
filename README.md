@@ -17,9 +17,6 @@ and Figures 3–4.
   blocks. Table 1 reports the worked sizes through \(m=n=9\).
 - `figures/` — Figures 3 and 4 as PDF files.
 
-These are the only generated artifacts tracked by the project. Individual
-simulation draws and intermediate summaries are intentionally not stored.
-
 ## Repository layout
 
 - `src/tsao/algorithms/` implements the approximation algorithms.
