@@ -108,7 +108,7 @@ def iter_appendix_g_campaign(
             round_digits,
         )
         yield GeneratedInstance(
-            stable_instance_id(campaign_id, replicate, child_seed, instance),
+            stable_instance_id(campaign_id, replicate, child_seed, size, size, q),
             campaign_id,
             "appendix_g",
             replicate,

@@ -32,15 +32,27 @@ def _selected(
         yield generated
 
 
-def _existing(path: Path) -> tuple[set[tuple[str, str]], dict[str, dict[str, Any]]]:
+def _existing(
+    path: Path,
+) -> tuple[
+    set[tuple[str, str]],
+    dict[str, dict[str, Any]],
+    dict[str, set[tuple[str, str]]],
+]:
     table = read_results(path, ["instance_id", "scenario_id", "algorithm", "value", "run_id"])
-    keys = {(str(row["scenario_id"]), str(row["algorithm"])) for row in table.to_pylist()}
+    rows = table.to_pylist()
+    keys = {(str(row["scenario_id"]), str(row["algorithm"])) for row in rows}
     oa = {
         str(row["instance_id"]): row
-        for row in table.to_pylist()
+        for row in rows
         if row["algorithm"] == "ALG_OA" and row["scenario_id"] == row["instance_id"]
     }
-    return keys, oa
+    by_instance: dict[str, set[tuple[str, str]]] = {}
+    for row in rows:
+        by_instance.setdefault(str(row["instance_id"]), set()).add(
+            (str(row["scenario_id"]), str(row["algorithm"]))
+        )
+    return keys, oa, by_instance
 
 
 def _flush(path: Path, pending: list[dict[str, Any]], keys: set[tuple[str, str]]) -> None:
@@ -67,7 +79,7 @@ def run_section7(
     unknown = set(algorithms) - (set(SECTION7_RUNNERS) | {"ALG_FA"})
     if unknown:
         raise ValueError(f"Unknown Section 7 algorithms: {sorted(unknown)}")
-    keys, oa_records = _existing(results_path)
+    keys, oa_records, by_instance = _existing(results_path)
     pending: list[dict[str, Any]] = []
     completed = 0
     adaptivity_algorithms = {
@@ -76,7 +88,16 @@ def run_section7(
     }
     adaptivity_sizes = set(config["adaptivity_sizes"])
     fully_static_sizes = set(config["fully_static_sizes"])
-    source = iter_generated_instances(instances_path, campaign_id=str(config["campaign_id"]))
+    complete_ids = {
+        instance_id
+        for instance_id, completed in by_instance.items()
+        if all((instance_id, algorithm) in completed for algorithm in algorithms)
+    }
+    source = iter_generated_instances(
+        instances_path,
+        campaign_id=str(config["campaign_id"]),
+        exclude_instance_ids=complete_ids,
+    )
     for generated in _selected(source, sizes, shard_count, shard_index, maximum):
         market_size = generated.instance.num_customers
         for algorithm in algorithms:
@@ -128,10 +149,19 @@ def run_figure3(
 ) -> int:
     """Fill missing Figure 3 values."""
 
-    keys, _ = _existing(results_path)
+    keys, _, by_instance = _existing(results_path)
     pending: list[dict[str, Any]] = []
     completed = 0
-    source = iter_generated_instances(instances_path, campaign_id=str(config["campaign_id"]))
+    complete_ids = {
+        instance_id
+        for instance_id, completed in by_instance.items()
+        if all((instance_id, algorithm) in completed for algorithm in algorithms)
+    }
+    source = iter_generated_instances(
+        instances_path,
+        campaign_id=str(config["campaign_id"]),
+        exclude_instance_ids=complete_ids,
+    )
     for generated in _selected(source, sizes, shard_count, shard_index, maximum):
         missing = tuple(
             algorithm for algorithm in algorithms if (generated.instance_id, algorithm) not in keys
@@ -160,10 +190,23 @@ def run_figure4(
 ) -> int:
     """Fill missing Figure 4 values."""
 
-    keys, _ = _existing(results_path)
+    keys, _, by_instance = _existing(results_path)
     pending: list[dict[str, Any]] = []
     completed = 0
-    source = iter_generated_instances(instances_path, campaign_id=str(config["campaign_id"]))
+    complete_ids = {
+        instance_id
+        for instance_id, completed in by_instance.items()
+        if all(
+            (outside_scenario_id(instance_id, float(outside_option)), algorithm) in completed
+            for outside_option in config["outside_option_values"]
+            for algorithm in algorithms
+        )
+    }
+    source = iter_generated_instances(
+        instances_path,
+        campaign_id=str(config["campaign_id"]),
+        exclude_instance_ids=complete_ids,
+    )
     for generated in _selected(source, sizes, shard_count, shard_index, maximum):
         for outside_option in config["outside_option_values"]:
             scenario_id = outside_scenario_id(generated.instance_id, float(outside_option))

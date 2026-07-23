@@ -18,7 +18,7 @@ def _generated(size: int, replicate: int) -> GeneratedInstance:
     seed = 40 + size
     instance = generate_section7_instance(size, size, seed)
     return GeneratedInstance(
-        instance_id=stable_instance_id("test", replicate, seed, instance),
+        instance_id=stable_instance_id("test", replicate, seed, size, size),
         campaign_id="test",
         experiment="section7",
         replicate=replicate,
@@ -36,7 +36,10 @@ def test_instance_file_round_trip_and_filters(tmp_path) -> None:
 
     restored = list(iter_generated_instances(path, "test", "section7", min_size=3, max_size=3))
     assert len(restored) == 1
-    assert restored[0].instance.checksum() == generated[1].instance.checksum()
+    assert restored[0].instance.num_customers == generated[1].instance.num_customers
+    assert restored[0].instance.num_suppliers == generated[1].instance.num_suppliers
+    assert (restored[0].instance.v == generated[1].instance.v).all()
+    assert (restored[0].instance.w == generated[1].instance.w).all()
     assert restored[0].master_seed == 99
     assert read_instances(path, ["instance_id", "num_customers"]).num_rows == 2
     assert pa.types.is_large_list(read_instances(path).schema.field("v_flat").type)

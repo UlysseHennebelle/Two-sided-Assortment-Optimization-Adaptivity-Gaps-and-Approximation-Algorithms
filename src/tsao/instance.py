@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
@@ -123,12 +122,3 @@ class MarketInstance:
             supplier_capacities=self.supplier_capacities,
             metadata={**self.metadata, "outside_normalized": True},
         )
-
-    def checksum(self) -> str:
-        """Hash matrices, outside options, and shapes for data-integrity checks."""
-
-        digest = hashlib.sha256()
-        digest.update(np.asarray(self.v.shape, dtype=np.int64).tobytes())
-        for array in (self.v, self.w, self.customer_outside, self.supplier_outside):
-            digest.update(np.ascontiguousarray(array, dtype=np.float64).tobytes())
-        return digest.hexdigest()

@@ -18,7 +18,9 @@ def test_instance_transposition_is_an_involution() -> None:
     np.testing.assert_array_equal(restored.v, instance.v)
     np.testing.assert_array_equal(restored.w, instance.w)
     np.testing.assert_array_equal(restored.customer_outside, instance.customer_outside)
-    assert restored.checksum() == instance.checksum()
+    np.testing.assert_array_equal(restored.supplier_outside, instance.supplier_outside)
+    assert restored.customer_capacities == instance.customer_capacities
+    assert restored.supplier_capacities == instance.supplier_capacities
 
 
 def test_mnl_probabilities_sum_to_one() -> None:

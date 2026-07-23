@@ -28,8 +28,20 @@ class GeneratedInstance:
     master_seed: int | None = None
 
 
-def stable_instance_id(campaign_id: str, replicate: int, seed: int, instance: MarketInstance) -> str:
-    payload = f"{campaign_id}|{replicate}|{seed}|{instance.checksum()}"
+def stable_instance_id(
+    campaign_id: str,
+    replicate: int,
+    seed: int,
+    num_customers: int,
+    num_suppliers: int,
+    q: int | None = None,
+) -> str:
+    """Return an identifier derived from deterministic campaign coordinates."""
+
+    payload = (
+        f"{campaign_id}|n={num_customers}|m={num_suppliers}|q={q}|"
+        f"replicate={replicate}|seed={seed}"
+    )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
 
 
@@ -93,7 +105,7 @@ def generate_section7_campaign(
             instance = generate_section7_instance(size, size, child_seed, round_digits)
             generated.append(
                 GeneratedInstance(
-                    stable_instance_id(campaign_id, replicate, child_seed, instance),
+                    stable_instance_id(campaign_id, replicate, child_seed, size, size),
                     campaign_id,
                     "section7",
                     replicate,

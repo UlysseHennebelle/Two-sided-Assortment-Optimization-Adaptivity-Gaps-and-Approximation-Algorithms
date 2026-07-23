@@ -21,7 +21,6 @@ INSTANCE_SCHEMA = pa.schema(
         ("supplier_outside", pa.large_list(pa.float64())),
         ("customer_capacities", pa.large_list(pa.int32())),
         ("supplier_capacities", pa.large_list(pa.int32())),
-        ("checksum", pa.string()),
     ]
 )
 

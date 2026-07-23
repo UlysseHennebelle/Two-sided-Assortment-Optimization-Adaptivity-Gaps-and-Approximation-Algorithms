@@ -32,9 +32,11 @@ def test_high_value_greedy_skips_customer_with_no_available_edge() -> None:
 
 def test_fully_static_supplier_high_case_uses_single_pure_transposition() -> None:
     instance = MarketInstance([[0.1, 0.2], [0.15, 0.1]], [[1.2, 0.9], [1.0, 1.1]])
-    checksum = instance.checksum()
+    original_v = instance.v.copy()
+    original_w = instance.w.copy()
     result = fully_static_algorithm(instance, replications=2, seed=4)
-    assert instance.checksum() == checksum
+    np.testing.assert_array_equal(instance.v, original_v)
+    np.testing.assert_array_equal(instance.w, original_w)
     assert result.metadata["alpha"] == EMPIRICAL_ALPHA
     assert set(result.metadata["candidate_values"]) == {"low_low", "customer_high", "supplier_high"}
 

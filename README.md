@@ -10,7 +10,7 @@ and Figures 3–4.
 ## Published artifacts
 
 - `data/instances.parquet` — all 5,052 generated market instances, including
-  seeds, dimensions, grouped-instance parameter `q`, matrices, and checksums.
+  seeds, dimensions, grouped-instance parameter `q`, and matrices.
 - `data/results.parquet` — all 21,496 final algorithm and benchmark values,
   including statuses, bounds, gaps, runtimes, and seeds where applicable.
 - `tables/` — Tables 1–4 as numerical Parquet files and LaTeX `tabular`
@@ -34,13 +34,32 @@ results, and resume logic.
 
 ## Environment
 
-The project uses Python 3.11 and Gurobi. Create the supplied Conda environment
-and install the package:
+The project uses Python 3.11 and Gurobi. The supplied environment installs
+Gurobi 13, which requires macOS 13 Ventura or newer. Before creating the
+environment, verify that your operating system satisfies the
+[Gurobi platform requirements](https://docs.gurobi.com/projects/optimizer/en/current/reference/releasenotes/platforms.html)
+and the requirements of the other dependencies.
+
+On a supported system, create the supplied Conda environment and install the
+package:
 
 ```powershell
 conda env create -f environment.yml
 conda run -n gurobi-env python -m pip install -e .
 ```
+
+On an older system such as macOS Monterey, create or activate an environment
+containing compatible package versions, then install this repository into that
+environment:
+
+```bash
+python -m pip install -e .
+```
+
+The editable installation is required after creating or switching
+environments. It registers the `tsao` package and installs the dependencies
+declared in `pyproject.toml`. Numerical experiment parameters are loaded from
+`config.toml`.
 
 A valid Gurobi license is required for optimization-based algorithms and
 benchmarks.

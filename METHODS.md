@@ -72,9 +72,9 @@ missing final values.
 ## Data artifacts
 
 `data/instances.parquet` contains one row per generated instance. Matrix values
-are stored in row-major lists with their dimensions and a SHA-256 checksum.
-Campaign coordinates, generation seeds, and the grouped-instance parameter
-\(q\) accompany each instance. The official campaign identifiers are
+are stored in row-major lists with their dimensions. Campaign coordinates,
+generation seeds, and the grouped-instance parameter \(q\) accompany each
+instance. The official campaign identifiers are
 `section7`, `figure3`, and `figure4`. The file contains 5,052 rows: 240 for
 Section 7, 4,612 for Figure 3, and 200 base instances for Figure 4.
 

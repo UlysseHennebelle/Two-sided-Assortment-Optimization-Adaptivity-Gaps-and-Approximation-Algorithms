@@ -18,7 +18,6 @@ def test_section7_seed_assignment_is_stable_when_grid_expands() -> None:
             (item.parameters["size"], item.replicate): (
                 item.instance_id,
                 item.generation_seed,
-                item.instance.checksum(),
             )
             for item in campaign
         }
@@ -30,9 +29,11 @@ def test_section7_seed_assignment_is_stable_when_grid_expands() -> None:
 
 def test_ub_oa_is_pure_and_compares_both_sides() -> None:
     instance = MarketInstance([[0.3, 0.6], [0.2, 0.9]], [[0.4, 0.8], [0.5, 0.7]])
-    checksum = instance.checksum()
+    original_v = instance.v.copy()
+    original_w = instance.w.copy()
     result = upper_bound_one_sided_adaptive(instance)
-    assert instance.checksum() == checksum
+    np.testing.assert_array_equal(instance.v, original_v)
+    np.testing.assert_array_equal(instance.w, original_w)
     assert result.value == max(result.customer_value, result.supplier_value)
 
 

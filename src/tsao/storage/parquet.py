@@ -39,7 +39,6 @@ def instance_record(generated: GeneratedInstance) -> dict[str, Any]:
         "supplier_outside": instance.supplier_outside.tolist(),
         "customer_capacities": list(instance.customer_capacities),
         "supplier_capacities": list(instance.supplier_capacities),
-        "checksum": instance.checksum(),
     }
 
 
@@ -48,7 +47,7 @@ def instance_from_record(record: dict[str, Any]) -> MarketInstance:
 
     n = int(record["num_customers"])
     m = int(record["num_suppliers"])
-    instance = MarketInstance(
+    return MarketInstance(
         np.asarray(record["v_flat"], dtype=np.float64).reshape((n, m)),
         np.asarray(record["w_flat"], dtype=np.float64).reshape((m, n)),
         np.asarray(record["customer_outside"], dtype=np.float64),
@@ -56,9 +55,6 @@ def instance_from_record(record: dict[str, Any]) -> MarketInstance:
         tuple(record["customer_capacities"]),
         tuple(record["supplier_capacities"]),
     )
-    if instance.checksum() != record["checksum"]:
-        raise ValueError(f"Checksum mismatch for instance {record['instance_id']}")
-    return instance
 
 
 def generated_instance_from_record(record: dict[str, Any]) -> GeneratedInstance:

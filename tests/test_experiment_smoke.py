@@ -2,7 +2,7 @@ import copy
 
 from tsao.config import load_config
 from tsao.experiments.appendix_g import evaluate
-from tsao.experiments.runner import run_section7
+from tsao.experiments.runner import run_figure3, run_section7
 from tsao.experiments.section7 import (
     reuse_alg_fa,
     run_alg_fs,
@@ -21,8 +21,11 @@ from tsao.storage.parquet import read_results, write_instances, write_results
 
 
 def _generated(campaign: str, experiment: str, instance, seed: int, parameters=None) -> GeneratedInstance:
+    q = (parameters or {}).get("q")
     return GeneratedInstance(
-        instance_id=stable_instance_id(campaign, 0, seed, instance),
+        instance_id=stable_instance_id(
+            campaign, 0, seed, instance.num_customers, instance.num_suppliers, q
+        ),
         campaign_id=campaign,
         experiment=experiment,
         replicate=0,
@@ -90,3 +93,27 @@ def test_section7_runner_respects_the_configured_table_grid(tmp_path) -> None:
     write_instances(instances, [generated])
     assert run_section7(instances, results, config, ("ALG_OS",), None, 1, 0, None) == 0
     assert read_results(results).num_rows == 0
+
+
+def test_completed_figure3_instance_is_prefiltered(tmp_path, monkeypatch) -> None:
+    config = copy.deepcopy(load_config("config.toml")["figure3"])
+    config.update(
+        campaign_id="figure-smoke",
+        fully_static_rounding_reps=2,
+        one_sided_static_reps_per_side=2,
+        one_sided_adaptive_reps_per_side=2,
+    )
+    instance = generate_appendix_g_instance(2, 2, q=2, seed=19)
+    generated = _generated("figure-smoke", "appendix_g", instance, 19, {"q": 2})
+    instances = tmp_path / "instances.parquet"
+    results = tmp_path / "results.parquet"
+    write_instances(instances, [generated])
+    write_results(results, evaluate(generated, config))
+
+    def no_instances(*args, **kwargs):
+        del args
+        assert generated.instance_id in kwargs["exclude_instance_ids"]
+        return iter(())
+
+    monkeypatch.setattr("tsao.experiments.runner.iter_generated_instances", no_instances)
+    assert run_figure3(instances, results, config, ("ALG_FS", "ALG_OS", "ALG_OA")) == 0
