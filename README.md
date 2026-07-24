@@ -94,3 +94,44 @@ Algorithm execution can be restricted with `--algorithms`, `--sizes`,
 ```powershell
 conda run -n gurobi-env python -m pytest
 ```
+
+## Run partial experiments
+
+The runner fills only missing results, so any of these commands can be repeated
+to resume an interrupted run. Options such as `--results` must appear before
+the `run` subcommand.
+
+Run only `ALG_OA` and `ALG_FA` for selected Section 7 sizes:
+
+```powershell
+conda run -n gurobi-env python scripts/run_experiments.py run section7 --algorithms ALG_OA ALG_FA --sizes 2 3 4
+```
+
+Run at most five selected Section 7 instances and store the results separately:
+
+```powershell
+conda run -n gurobi-env python scripts/run_experiments.py --results data/results_partial.parquet run section7 --algorithms ALG_OA ALG_FA --sizes 2 3 --max-instances 5
+```
+
+Run only `ALG_OA` for two Figure 3 sizes:
+
+```powershell
+conda run -n gurobi-env python scripts/run_experiments.py run figure3 --algorithms ALG_OA --sizes 50 100
+```
+
+Run one deterministic shard of a campaign; use shard indices `0`, `1`, `2`,
+and `3` to cover all four shards:
+
+```powershell
+conda run -n gurobi-env python scripts/run_experiments.py run section7 --algorithms ALG_OA --shard-count 4 --shard-index 0
+```
+
+Build only Tables 2 and 3 from a partial result file:
+
+```powershell
+conda run -n gurobi-env python scripts/make_tables.py --results data/results_partial.parquet --output tables/partial --tables table2 table3
+```
+
+Existing rows are not overwritten. To recompute an existing algorithm result
+with changed parameters, first remove the corresponding rows from the result
+artifact or write the new run to a separate result file.
