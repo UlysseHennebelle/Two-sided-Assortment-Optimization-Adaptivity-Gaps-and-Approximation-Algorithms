@@ -41,7 +41,7 @@ def test_numerical_protocol_matches_the_paper_configuration() -> None:
     config = load_config("config.toml")
     section = config["section7"]
     assert EMPIRICAL_ALPHA == (math.sqrt(5.0) - 1.0) / 2.0
-    assert section["fully_static_sizes"] == [2, 3, 4, 5, 6, 8, 9]
+    assert section["fully_static_sizes"] == [2, 3, 4, 5, 6, 8, 9, 10]
     assert inspect.signature(one_sided_static_algorithm).parameters["replications_per_side"].default == 50
     assert section["algorithms"]["one_sided_static_reps_per_side"] == 50
     assert section["benchmarks"] == {

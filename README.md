@@ -11,10 +11,10 @@ and Figures 3–4.
 
 - `data/instances.parquet` — all 5,052 generated market instances, including
   seeds, dimensions, grouped-instance parameter `q`, and matrices.
-- `data/results.parquet` — all 21,496 final algorithm and benchmark values,
+- `data/results.parquet` — all 21,506 final algorithm and benchmark values,
   including statuses, bounds, gaps, runtimes, and seeds where applicable.
 - `tables/` — Tables 1–4 as numerical Parquet files and LaTeX `tabular`
-  blocks. Table 1 reports the worked sizes through \(m=n=9\).
+  blocks. Table 1 reports the worked sizes through \(m=n=10\).
 - `figures/` — Figures 3 and 4 as PDF files.
 
 ## Repository layout
