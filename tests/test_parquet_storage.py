@@ -59,3 +59,13 @@ def test_result_file_append_preserves_final_values(tmp_path) -> None:
         "OPT_OS": 1.25,
         "OPT_OA": 1.5,
     }
+
+
+def test_result_directory_combines_shard_files(tmp_path) -> None:
+    directory = tmp_path / "shards"
+    first = simple_value_record("test", "one", "one", "OPT_OS", 1.25, 0.1)
+    second = simple_value_record("test", "two", "two", "OPT_OA", 1.5, 0.2)
+    write_results(directory / "shard-0.parquet", [first])
+    write_results(directory / "shard-1.parquet", [second])
+    stored = read_results(directory).to_pandas()
+    assert set(stored["algorithm"]) == {"OPT_OS", "OPT_OA"}

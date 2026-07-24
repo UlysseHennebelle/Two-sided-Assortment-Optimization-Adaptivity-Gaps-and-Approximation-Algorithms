@@ -17,18 +17,16 @@ def _selected(
     sizes: set[int] | None,
     shard_count: int,
     shard_index: int,
-    maximum: int | None,
+    maximum_per_size: int | None,
 ) -> Iterable[GeneratedInstance]:
-    count = 0
     for generated in source:
         size = generated.instance.num_customers
         if sizes is not None and size not in sizes:
             continue
+        if maximum_per_size is not None and generated.replicate >= maximum_per_size:
+            continue
         if int(generated.instance_id, 16) % shard_count != shard_index:
             continue
-        if maximum is not None and count >= maximum:
-            break
-        count += 1
         yield generated
 
 

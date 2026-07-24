@@ -152,7 +152,11 @@ def main() -> None:
     run_parser.add_argument("experiment", choices=["section7", "figure3", "figure4"])
     run_parser.add_argument("--algorithms", nargs="+")
     run_parser.add_argument("--sizes", nargs="+", type=int)
-    run_parser.add_argument("--max-instances", type=int)
+    run_parser.add_argument(
+        "--max-instances",
+        type=int,
+        help="maximum generated replicates per selected size (and per q for Figure 3)",
+    )
     run_parser.add_argument("--shard-count", type=int, default=1)
     run_parser.add_argument("--shard-index", type=int, default=0)
 
@@ -161,6 +165,8 @@ def main() -> None:
         raise ValueError("shard-count must be positive")
     if not 0 <= getattr(args, "shard_index", 0) < getattr(args, "shard_count", 1):
         raise ValueError("shard-index must be smaller than shard-count")
+    if getattr(args, "max_instances", None) is not None and args.max_instances <= 0:
+        raise ValueError("max-instances must be positive")
     config = load_config(args.config)
     if args.command == "generate":
         generate(args, config)

@@ -1,8 +1,9 @@
 import copy
+from collections import Counter
 
 from tsao.config import load_config
 from tsao.experiments.appendix_g import evaluate
-from tsao.experiments.runner import run_figure3, run_section7
+from tsao.experiments.runner import _selected, run_figure3, run_section7
 from tsao.experiments.section7 import (
     reuse_alg_fa,
     run_alg_fs,
@@ -34,6 +35,37 @@ def _generated(campaign: str, experiment: str, instance, seed: int, parameters=N
         parameters=parameters or {},
         master_seed=seed,
     )
+
+
+def _generated_replicate(size: int, replicate: int) -> GeneratedInstance:
+    seed = 1000 * size + replicate
+    instance = generate_section7_instance(size, size, seed)
+    return GeneratedInstance(
+        instance_id=stable_instance_id("selection", replicate, seed, size, size),
+        campaign_id="selection",
+        experiment="section7",
+        replicate=replicate,
+        generation_seed=seed,
+        instance=instance,
+        parameters={"size": size},
+        master_seed=1,
+    )
+
+
+def test_max_instances_is_applied_per_selected_size() -> None:
+    source = [
+        _generated_replicate(size, replicate)
+        for size in (2, 3)
+        for replicate in range(4)
+    ]
+    selected = list(_selected(source, {2, 3}, 1, 0, 2))
+    assert Counter(item.instance.num_customers for item in selected) == {2: 2, 3: 2}
+    shards = [
+        item
+        for shard_index in range(2)
+        for item in _selected(source, {2, 3}, 2, shard_index, 2)
+    ]
+    assert {item.instance_id for item in shards} == {item.instance_id for item in selected}
 
 
 def test_tiny_section7_job_writes_all_final_values(tmp_path) -> None:
