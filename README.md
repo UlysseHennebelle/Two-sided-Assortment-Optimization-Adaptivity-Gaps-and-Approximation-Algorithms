@@ -78,16 +78,11 @@ conda run -n gurobi-env python scripts/run_experiments.py generate --experiment 
 ```
 
 Generation is deterministic. With the same configuration and fixed seeds, it
-produces identical instances; it does not draw a new independent sample.
+produces identical instances.
 `--experiment all` generates all three campaigns. When the selected instance
 artifact already exists, the command replaces those campaigns. Selecting
 `section7`, `figure3`, or `figure4` replaces only that campaign and retains the
 others.
-
-The command does not modify the result artifact. If generation settings that
-affect existing matrices are changed, existing results may no longer describe
-the newly generated instances. In that case, use a new result file or remove the
-affected result rows before running algorithms.
 
 After the instance artifact exists, run the algorithms and build the reporting
 artifacts:
